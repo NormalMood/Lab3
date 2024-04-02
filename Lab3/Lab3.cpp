@@ -2,77 +2,64 @@
 #include <vector>
 #include <cmath>
 #include <omp.h>
+#include <chrono>
 
 using namespace std;
 
-void printMatrix(const vector<vector<double>>& matrix) {
-    for (const auto& row : matrix) {
-        for (int i = 0; i < row.size(); i++) {
-            if (i < row.size() - 1) {
-                if (row.at(i) >= 0)
-                    cout << " + " << row.at(i) << " * x" << i + 1 << '\t';
-                else
-                    cout << " - " << abs(row.at(i)) << " * x" << i + 1 << '\t';
-            }
-            else
-                cout << " = " << row.at(i) << '\t';
+const int N = 3000;
+vector<double> solution(N);
 
-        }
-        cout << '\n';
-    }
+int get_random_number(int min, int max) {
+    return rand() % (max - min + 1) + min;
 }
 
-void solveByGaussian(vector<vector<double>>& matrix) {
-    const int n = matrix.size();
-
-    for (int i = 0; i < n - 1; ++i) {
-        #pragma omp parallel for shared(matrix) default(none) schedule(static)
-        for (int k = i + 1; k < n; ++k) {
-            double factor = matrix[k][i] / matrix[i][i];
-            for (int j = i; j < n + 1; ++j) {
-                matrix[k][j] -= factor * matrix[i][j];
+void solve_gauss(double** matrix) {
+    #pragma omp parallel
+    for (int i = 0; i < N - 1; i++)
+    {
+        #pragma omp for
+        for (int j = i + 1; j < N; j++) {
+            double coeff = matrix[j][i] / matrix[i][i];
+            for (int k = i; k < N + 1; k++) {
+                matrix[j][k] = matrix[j][k] - coeff * matrix[i][k];
             }
         }
     }
 
-    vector<double> solution(n);
-    for (int i = n - 1; i >= 0; --i) {
-        solution[i] = matrix[i][n];
-        #pragma omp parallel for shared(matrix, solution) default(none) schedule(static)
-        for (int j = i + 1; j < n; ++j) {
+    for (int i = N - 1; i >= 0; i--) {
+        solution[i] = matrix[i][N];
+        for (int j = i + 1; j < N; j++) {
             solution[i] -= matrix[i][j] * solution[j];
         }
-        solution[i] /= matrix[i][i];
+        solution[i] = solution[i] / matrix[i][i];
     }
 
-    cout << "Solution:\n";
-    for (int i = 0; i < n; ++i) {
-        cout << "x" << i + 1 << " = " << solution[i] << '\n';
-    }
 }
 
 int main() {
 
-    vector<vector<vector<double>>> matrix = {
-        {
-            {2, 1, -1, 8},
-            {-3, -1, 2, -11},
-            {-2, 1, 2, -3}
-        },
-        {
-            {-2, 8, 9, -12, 34},
-            {8, 11, 3, 1, 39},
-            {31, -10, 2, -5, 109},
-            {60, -15, -9, -6, 111}
-}
-    };
-
-    for (int i = 0; i < matrix.size(); i++) {
-        cout << '\n' << '#' << i + 1 << "\n\n";
-        cout << "Original Matrix:\n";
-        printMatrix(matrix[i]);
-        solveByGaussian(matrix[i]);
+    double** matrix = new double* [N];
+    for (int i = 0; i < N; ++i) {
+        matrix[i] = new double[N + 1];
+        for (int j = 0; j < N + 1; ++j) {
+            matrix[i][j] = get_random_number(1, 20);
+        }
     }
+
+    auto begin = std::chrono::steady_clock::now();
+    solve_gauss(matrix);
+    auto end = std::chrono::steady_clock::now();
+    std::chrono::duration<double> solving_time = end - begin;
+    cout << "Solution:\n";
+    for (int i = 0; i < N; ++i) {
+        cout << "x" << i + 1 << " = " << solution[i] << '\n';
+    }
+    cout << "Solution time: " << solving_time.count() << endl;
+    
+    for (int i = 0; i < N; ++i) {
+        delete[] matrix[i];
+    }
+    delete[] matrix;
 
     return 0;
 }
